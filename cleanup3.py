@@ -4,6 +4,7 @@
 # - do not have the tag 'latest'
 # - do not have the tag 'release'
 # - do not have the tag 'r*'
+
 import datetime
 import os
 import sys
@@ -16,7 +17,9 @@ token = os.environ['TOKEN']
 retention_period_days = int(os.environ['RETENTION_PERIOD_DAYS'])
 now = datetime.datetime.now()
 today = datetime.date(now.year, now.month, now.day)
-pattern = 'r"release|latest|r\d\.\d\.\d*|"'
+pattern_keep = os.environ['PATTERN_KEEP']
+pattern_delete = os.environ['PATTERN_DELETE']
+
 headers = {'PRIVATE-TOKEN': f'{token}'}
 def getData(url):
     try:
@@ -44,22 +47,26 @@ for repository in repos:
     # Loop through each of the tags to get creation date
     for tag in tags:
         # Check if the tag matches the ignore pattern
-        if re.match(pattern, tag['name']):
+        if re.match(pattern_keep, tag['name']):
             # Respond that the tag will be ignored since it matches the pattern
             print('Not deleting ' + tag['path'] + ' because it matches the ignore pattern.')
         # If the tag doesn't match the ignore pattern, continue to delete if age is older than the retention period
         else:
-            # Collect the details of the given tag
-            tag_name = tag['name']
-            tag_details = getData(f"{baseurl}/projects/{project_id}/registry/repositories/{repo_id}/tags/{tag_name}")
-            # Calculate age in days from today
-            date_time_str = tag_details['created_at']
-            date_str = date_time_str[:-19]
-            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d')
-            age_days = (today-date_obj.date()).days
-            # Delete or do not delete based on age
-            if age_days > retention_period_days:
-                print('Deleting ' + tag['path'] + ' for being ' + str(age_days) + ' days old.')
-                delete(f"{baseurl}/projects/{project_id}/registry/repositories/{repo_id}/tags/{tag_name}")
+            # Check if the tag matches the delete pattern
+            if re.match(pattern_delete, tag['name']):
+                # Collect the details of the given tag
+                tag_name = tag['name']
+                tag_details = getData(f"{baseurl}/projects/{project_id}/registry/repositories/{repo_id}/tags/{tag_name}")
+                # Calculate age in days from today
+                date_time_str = tag_details['created_at']
+                date_str = date_time_str[:-19]
+                date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+                age_days = (today-date_obj.date()).days
+                # Delete or do not delete based on age
+                if age_days > retention_period_days:
+                    print('Deleting ' + tag['path'] + ' for being ' + str(age_days) + ' days old.')
+                    delete(f"{baseurl}/projects/{project_id}/registry/repositories/{repo_id}/tags/{tag_name}")
+                else:
+                    print('Not deleting ' + tag['path'] + ' because it is only ' + str(age_days) + ' day(s) old.')
             else:
-                print('Not deleting ' + tag['path'] + ' because it is only ' + str(age_days) + ' day(s) old.')
+                print('Not deleting ' + tag['path'] + ' because it not matches the delete pattern.')
